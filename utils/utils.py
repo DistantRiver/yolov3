@@ -449,8 +449,10 @@ def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, mo
 
 def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
+    ByteTensor = torch.cuda.ByteTensor if targets.is_cuda else torch.ByteTensor
 
     nt = len(targets)
+    nomatch_mask = ByteTensor(nt).fill_(1)
     tcls, tbox, indices, av = [], [], [], []
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
     reject, use_all_anchors = True, True
@@ -466,6 +468,7 @@ def build_targets(model, targets):
         gwh = t[:, 4:6] * ng
         if nt:
             iou = wh_iou(anchor_vec, gwh)
+            best_iou, best_a = iou.max(0)  # best iou and anchor
 
             if use_all_anchors:
                 na = len(anchor_vec)  # number of anchors
@@ -473,12 +476,15 @@ def build_targets(model, targets):
                 t = targets.repeat([na, 1])
                 gwh = gwh.repeat([na, 1])
             else:  # use best anchor only
-                iou, a = iou.max(0)  # best iou and anchor
+                iou = best_iou
+                a = best_a
 
             # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
             if reject:
                 j = iou.view(-1) > model.hyp['iou_t']  # iou threshold hyperparameter
                 t, a, gwh = t[j], a[j], gwh[j]
+                j = best_iou.view(-1) > model.hyp['iou_t']
+                nomatch_mask[j] = 0
 
         # Indices
         b, c = t[:, :2].long().t()  # target image, class

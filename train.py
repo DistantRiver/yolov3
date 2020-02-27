@@ -254,11 +254,11 @@ def train():
             #         x['weight_decay'] = hyp['weight_decay'] * g
 
             # Plot images with bounding boxes
-            if ni == 0:
-                fname = 'train_batch%g.png' % i
-                plot_images(imgs=imgs, targets=targets, paths=paths, fname=fname)
-                if tb_writer:
-                    tb_writer.add_image(fname, cv2.imread(fname)[:, :, ::-1], dataformats='HWC')
+            #if ni == 0:
+            #    fname = 'train_batch%g.png' % i
+            #    plot_images(imgs=imgs, targets=targets, paths=paths, fname=fname)
+            #    if tb_writer:
+            #        tb_writer.add_image(fname, cv2.imread(fname)[:, :, ::-1], dataformats='HWC')
 
             # Multi-Scale training
             if opt.multi_scale:
@@ -379,8 +379,8 @@ def train():
             os.system('gsutil cp %s gs://%s/weights' % (wdir + flast, opt.bucket))
             # os.system('gsutil cp %s gs://%s/weights' % (wdir + fbest, opt.bucket))
 
-    if not opt.evolve:
-        plot_results()  # save as results.png
+    #if not opt.evolve:
+    #    plot_results()  # save as results.png
     print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
     dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
     torch.cuda.empty_cache()
