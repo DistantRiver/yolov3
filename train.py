@@ -273,7 +273,7 @@ def train():
             pred = model(imgs)
 
             # Compute loss
-            loss, loss_items = compute_loss(pred, targets, model, not prebias)
+            loss, loss_items = compute_loss(pred, targets, model, len(imgs), not prebias)
             if not torch.isfinite(loss):
                 print('WARNING: non-finite loss, ending training ', loss_items)
                 return results

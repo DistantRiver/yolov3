@@ -389,11 +389,11 @@ class FocalLoss(nn.Module):
             return loss
 
 
-def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, model
+def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, targets, model
     ft = torch.cuda.FloatTensor if p[0].is_cuda else torch.Tensor
 
     lcls, lbox, lobj, lroi = ft([0]), ft([0]), ft([0]), ft([0])
-    tcls, tbox, indices, anchor_vec, roi_cls, roi_boxes, roi_boxes_sum, roi_indices, roi_anchor_vec = build_targets(model, targets)
+    tcls, tbox, indices, anchor_vec, roi_cls, roi_boxes, roi_boxes_sum, roi_indices, roi_anchor_vec = build_targets(model, targets, img_num)
     h = model.hyp  # hyperparameters
     arc = model.arc  # # (default, uCE, uBCE) detection architectures
     red = 'mean'  # Loss reduction (sum or mean)
@@ -497,7 +497,7 @@ def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, mo
     return loss, torch.cat((lbox, lobj, lcls, lroi, loss)).detach()
 
 
-def build_targets(model, targets):
+def build_targets(model, targets, img_num):
     # targets = [image, class, x, y, w, h]
     ByteTensor = torch.cuda.ByteTensor if targets.is_cuda else torch.ByteTensor
     LongTensor = torch.cuda.LongTensor if targets.is_cuda else torch.LongTensor
@@ -584,7 +584,6 @@ def build_targets(model, targets):
         gxy -= gxy.floor()  # xy
         nomatch_boxes = torch.cat((gxy, gwh), 1)
 
-        img_num = len(set(b))
         img_indexes = [[] * img_num for k in range(img_num)]
         nomatch_boxes_sorted = []
         nomatch_boxes_sorted_sum = FloatTensor(img_num).fill_(0)
