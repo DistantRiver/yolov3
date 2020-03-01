@@ -304,6 +304,32 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False):
 
     return iou
 
+def roi_value(box, roi_boxes, roi_boxes_sum, x1y1x2y2=True):
+    FloatTensor = torch.cuda.FloatTensor if box[0].is_cuda else torch.FloatTensor
+
+    num_box = len(box)
+
+    if x1y1x2y2:  # x1, y1, x2, y2 = box
+        b_x1, b_y1, b_x2, b_y2 = box[0], box[1], box[2], box[3]
+    else:  # x, y, w, h = box
+        b_x1, b_x2 = box[0] - box[2] / 2, box[0] + box[2] / 2
+        b_y1, b_y2 = box[1] - box[3] / 2, box[1] + box[3] / 2
+    
+    roi_value = FloatTensor(num_box)
+    for i in range(num_box):
+        boxes = roi_boxes[i].t()
+        if x1y1x2y2:  # x1, y1, x2, y2 = box
+            bs_x1, bs_y1, bs_x2, bs_y2 = boxes[0], boxes[1], boxes[2], boxes[3]
+        else:  # x, y, w, h = box
+            bs_x1, bs_x2 = boxes[0] - boxes[2] / 2, boxes[0] + boxes[2] / 2
+            bs_y1, bs_y2 = boxes[1] - boxes[3] / 2, boxes[1] + boxes[3] / 2
+
+        inter = (torch.min(b_x2[i], bs_x2) - torch.max(b_x1[i], bs_x1)).clamp(0) * \
+                (torch.min(b_y2[i], bs_y2) - torch.max(b_y1[i], bs_y1)).clamp(0)
+        
+        roi_value[i] = torch.sum(inter) / roi_boxes_sum[i]
+
+    return roi_value
 
 def box_iou(boxes1, boxes2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
@@ -315,7 +341,7 @@ def box_iou(boxes1, boxes2):
         boxes2 (Tensor[M, 4])
     Returns:
         iou (Tensor[N, M]): the NxM matrix containing the pairwise
-            IoU values for every element in boxes1 and boxes2
+            IoU values for eve6ry element in boxes1 and boxes2
     """
 
     def box_area(box):
@@ -365,8 +391,9 @@ class FocalLoss(nn.Module):
 
 def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, model
     ft = torch.cuda.FloatTensor if p[0].is_cuda else torch.Tensor
-    lcls, lbox, lobj = ft([0]), ft([0]), ft([0])
-    tcls, tbox, indices, anchor_vec = build_targets(model, targets)
+
+    lcls, lbox, lobj, lroi = ft([0]), ft([0]), ft([0]), ft([0])
+    tcls, tbox, indices, anchor_vec, roi_cls, roi_boxes, roi_boxes_sum, roi_indices, roi_anchor_vec = build_targets(model, targets)
     h = model.hyp  # hyperparameters
     arc = model.arc  # # (default, uCE, uBCE) detection architectures
     red = 'mean'  # Loss reduction (sum or mean)
@@ -388,9 +415,13 @@ def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, mo
         tobj = torch.zeros_like(pi[..., 0])  # target obj
         np += tobj.numel()
 
+        not_occupied_mask = torch.ones_like(pi)
+
         # Compute losses
         nb = len(b)
         if nb:  # number of targets
+            not_occupied_mask[b, a, gj, gi] = 0
+
             ng += nb
             ps = pi[b, a, gj, gi]  # prediction subset corresponding to targets
             # ps[:, 2:4] = torch.sigmoid(ps[:, 2:4])  # wh power loss (uncomment)
@@ -417,6 +448,25 @@ def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, mo
             # Append targets to text file
             # with open('targets.txt', 'a') as file:
             #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
+        
+        if i == 0:
+            r_b, r_a, r_gj, r_gi = roi_indices[i]  # image, anchor, gridy, gridx
+            nb_r = len(r_b)
+            if nb_r:
+                ps_r = pi[r_b, r_a, r_gj, r_gi]
+                pxy_r = torch.sigmoid(ps_r[:, 0:2])  # pxy = pxy * s - (s - 1) / 2,  s = 1.5  (scale_xy)
+                pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
+                pwh_r = pwh_r_co * roi_anchor_vec[i]
+                pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
+                roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], x1y1x2y2=False)
+                roi_loss = [(1 - roi_loss) + pwh_r_co[0] * pwh_r_co[1]] * not_occupied_mask[r_b, r_a, r_gj, r_gi]
+                lroi += roi_loss.mean()
+                tobj[r_b, r_a, r_gj, r_gi] += not_occupied_mask[r_b, r_a, r_gj, r_gi]
+
+                if 'default' in arc and model.nc > 1:  # cls loss (only if multiple classes)
+                    t = torch.zeros_like(ps_r[:, 5:])  # targets
+                    t[range(nb_r), roi_cls[i]] = 1.0
+                    lcls += BCEcls(ps_r[:, 5:] * not_occupied_mask[r_b, r_a, r_gj, r_gi], t * not_occupied_mask[r_b, r_a, r_gj, r_gi])  # BCE
 
         if 'default' in arc:  # separate obj and cls
             lobj += BCEobj(pi[..., 4], tobj)  # obj loss
@@ -443,17 +493,19 @@ def compute_loss(p, targets, model, giou_flag=True):  # predictions, targets, mo
             lcls *= 3 / ng / model.nc
             lbox *= 3 / ng
 
-    loss = lbox + lobj + lcls
-    return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
+    loss = lbox + lobj + lcls + lroi
+    return loss, torch.cat((lbox, lobj, lcls, lroi, loss)).detach()
 
 
 def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
     ByteTensor = torch.cuda.ByteTensor if targets.is_cuda else torch.ByteTensor
+    LongTensor = torch.cuda.LongTensor if targets.is_cuda else torch.LongTensor
+    FloatTensor = torch.cuda.FloatTensor if targets.is_cuda else torch.FloatTensor
 
     nt = len(targets)
     nomatch_mask = ByteTensor(nt).fill_(1)
-    tcls, tbox, indices, av = [], [], [], []
+    tcls, tbox, indices, av, roi_cls, roi_indices, roi_av = [], [], [], [], [], [], []
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
     reject, use_all_anchors = True, True
     for i in model.yolo_layers:
@@ -485,7 +537,7 @@ def build_targets(model, targets):
                 t, a, gwh = t[j], a[j], gwh[j]
                 j = best_iou.view(-1) > model.hyp['iou_t']
                 nomatch_mask[j] = 0
-
+        
         # Indices
         b, c = t[:, :2].long().t()  # target image, class
         gxy = t[:, 2:4] * ng  # grid x, y
@@ -503,8 +555,58 @@ def build_targets(model, targets):
             assert c.max() < model.nc, 'Model accepts %g classes labeled from 0-%g, however you labelled a class %g. ' \
                                        'See https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data' % (
                                            model.nc, model.nc - 1, c.max())
+    
+    nomatch_targets = targets[nomatch_mask]
+    roi_boxes = []
+    roi_boxes_sum = []
+    if nomatch_targets:
+        i = model.yolo_layers[0]
+        if multi_gpu:
+            ng, anchor_vec = model.module.module_list[i].ng, model.module.module_list[i].anchor_vec
+        else:
+            ng, anchor_vec = model.module_list[i].ng, model.module_list[i].anchor_vec
 
-    return tcls, tbox, indices, av
+        nomatch_targets[:, 2:6] *= ng
+
+        na = len(anchor_vec)  # number of anchors
+        a = torch.arange(na).view((-1, 1)).repeat([1, nt]).view(-1)
+        t = nomatch_targets.repeat([na, 1])
+        gwh = gwh.repeat([na, 1])
+
+        gwh = t[:, 4:6]
+        b, c = t[:, :2].long().t()  # target image, class
+        gxy = t[:, 2:4]  # grid x, y
+        gi, gj = gxy.long().t()  # grid x, y indices
+        roi_indices.append((b, a, gj, gi))
+
+        roi_av.append(anchor_vec[a])
+
+        gxy -= gxy.floor()  # xy
+        nomatch_boxes = torch.cat((gxy, gwh), 1)
+
+        img_num = len(set(b))
+        img_indexes = [[] * img_num for k in range(img_num)]
+        nomatch_boxes_sorted = []
+        nomatch_boxes_sorted_sum = FloatTensor(img_num).fill_(0)
+        for m, img_index in enumerate(b):
+            img_indexes[img_index].append(m)
+            nomatch_boxes_sorted_sum[img_index] += (gwh[m][0] * gwh[m][1])
+        
+        for j in range(img_num):
+            nomatch_boxes_sorted.append(nomatch_boxes[img_indexes[j]])
+        
+        nomatch_boxes_all = []
+        for m, img_index in enumerate(b):
+            nomatch_boxes_all.append(nomatch_boxes_sorted[img_index])
+        
+        nomatch_boxes_all_sum = nomatch_boxes_sorted_sum[b]
+
+        roi_boxes.append(nomatch_boxes_all)
+        roi_boxes_sum.append(nomatch_boxes_all_sum)
+
+        roi_cls.append(LongTensor(len(b)).fill_(model.nc))
+
+    return tcls, tbox, indices, av, roi_cls, roi_boxes, roi_boxes_sum, roi_indices, roi_av
 
 
 def non_max_suppression(prediction, conf_thres=0.5, iou_thres=0.5, multi_cls=True, classes=None, agnostic=False):

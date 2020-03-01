@@ -68,7 +68,7 @@ def test(cfg,
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'F1')
     p, r, f1, mp, mr, map, mf1 = 0., 0., 0., 0., 0., 0., 0.
-    loss = torch.zeros(3)
+    loss = torch.zeros(4)
     jdict, stats, ap, ap_class = [], [], [], []
     for batch_i, (imgs, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
         imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
@@ -87,7 +87,7 @@ def test(cfg,
 
             # Compute loss
             if hasattr(model, 'hyp'):  # if model has loss hyperparameters
-                loss += compute_loss(train_out, targets, model)[1][:3].cpu()  # GIoU, obj, cls
+                loss += compute_loss(train_out, targets, model)[1][:4].cpu()  # GIoU, obj, cls, roi
 
             # Run NMS
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres)
