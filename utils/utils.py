@@ -604,7 +604,7 @@ def build_targets(model, targets, img_num):
         roi_boxes.append(nomatch_boxes_all)
         roi_boxes_sum.append(nomatch_boxes_all_sum)
 
-        roi_cls.append(LongTensor(len(b)).fill_(model.nc))
+        roi_cls.append(LongTensor(len(b)).fill_(model.nc - 1))
 
     return tcls, tbox, indices, av, roi_cls, roi_boxes, roi_boxes_sum, roi_indices, roi_av
 
