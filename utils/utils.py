@@ -453,20 +453,21 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
             r_b, r_a, r_gj, r_gi = roi_indices[i]  # image, anchor, gridy, gridx
             nb_r = len(r_b)
             if nb_r:
+                roi_mask = not_occupied_mask[r_b, r_a, r_gj, r_gi]
                 ps_r = pi[r_b, r_a, r_gj, r_gi]
                 pxy_r = torch.sigmoid(ps_r[:, 0:2])  # pxy = pxy * s - (s - 1) / 2,  s = 1.5  (scale_xy)
                 pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
                 pwh_r = pwh_r_co * roi_anchor_vec[i]
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
                 roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], x1y1x2y2=False)
-                roi_loss = [(1 - roi_loss) + pwh_r_co[0] * pwh_r_co[1]] * not_occupied_mask[r_b, r_a, r_gj, r_gi]
+                roi_loss = ((1 - roi_loss) + pwh_r_co[0] * pwh_r_co[1]) * roi_mask
                 lroi += roi_loss.mean()
-                tobj[r_b, r_a, r_gj, r_gi] += not_occupied_mask[r_b, r_a, r_gj, r_gi]
+                tobj[r_b, r_a, r_gj, r_gi] += roi_mask
 
                 if 'default' in arc and model.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.zeros_like(ps_r[:, 5:])  # targets
                     t[range(nb_r), roi_cls[i]] = 1.0
-                    lcls += BCEcls(ps_r[:, 5:] * not_occupied_mask[r_b, r_a, r_gj, r_gi], t * not_occupied_mask[r_b, r_a, r_gj, r_gi])  # BCE
+                    lcls += BCEcls(ps_r[:, 5:] * roi_mask, t * roi_mask)  # BCE
 
         if 'default' in arc:  # separate obj and cls
             lobj += BCEobj(pi[..., 4], tobj)  # obj loss
