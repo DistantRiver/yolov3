@@ -454,21 +454,21 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
             nb_r = len(r_b)
             if nb_r:
                 roi_mask = not_occupied_mask[r_b, r_a, r_gj, r_gi]
-                ps_r = pi[r_b, r_a, r_gj, r_gi]
+                ps_r = pi[r_b, r_a, r_gj, r_gi][roi_mask]
                 pxy_r = torch.sigmoid(ps_r[:, 0:2])  # pxy = pxy * s - (s - 1) / 2,  s = 1.5  (scale_xy)
                 pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
                 pwh_r = pwh_r_co * roi_anchor_vec[i]
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
                 roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], x1y1x2y2=False)
                 pwh_r_co_w, pwh_r_co_h = pwh_r_co.t()
-                roi_loss = ((1 - roi_loss) + pwh_r_co_w * pwh_r_co_h)[roi_mask]
+                roi_loss = ((1 - roi_loss) + pwh_r_co_w * pwh_r_co_h)
                 lroi += roi_loss.mean()
                 tobj[r_b, r_a, r_gj, r_gi][roi_mask] = 1.0
 
                 if 'default' in arc and model.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.zeros_like(ps_r[:, 5:])  # targets
                     t[range(nb_r), roi_cls[i]] = 1.0
-                    lcls += BCEcls(ps_r[roi_mask, 5:], t[roi_mask])  # BCE
+                    lcls += BCEcls(ps_r[:, 5:], t)  # BCE
 
         if 'default' in arc:  # separate obj and cls
             lobj += BCEobj(pi[..., 4], tobj)  # obj loss
