@@ -415,7 +415,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
         tobj = torch.zeros_like(pi[..., 0])  # target obj
         np += tobj.numel()
 
-        not_occupied_mask = torch.ones_like(pi)
+        not_occupied_mask = torch.ones_like(pi[..., 0])
 
         # Compute losses
         nb = len(b)
