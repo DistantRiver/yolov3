@@ -559,7 +559,8 @@ def build_targets(model, targets, img_num):
     nomatch_targets = targets[nomatch_mask]
     roi_boxes = []
     roi_boxes_sum = []
-    if len(nomatch_targets) > 0:
+    nt_nomatch = len(nomatch_targets)
+    if nt_nomatch:
         i = model.yolo_layers[0]
         if multi_gpu:
             ng, anchor_vec = model.module.module_list[i].ng, model.module.module_list[i].anchor_vec
@@ -567,7 +568,7 @@ def build_targets(model, targets, img_num):
             ng, anchor_vec = model.module_list[i].ng, model.module_list[i].anchor_vec
 
         na = len(anchor_vec)  # number of anchors
-        a = torch.arange(na).view((-1, 1)).repeat([1, nt]).view(-1)
+        a = torch.arange(na).view((-1, 1)).repeat([1, nt_nomatch]).view(-1)
         t = nomatch_targets.repeat([na, 1])
         gwh = gwh.repeat([na, 1])
 
