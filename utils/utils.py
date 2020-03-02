@@ -566,16 +566,14 @@ def build_targets(model, targets, img_num):
         else:
             ng, anchor_vec = model.module_list[i].ng, model.module_list[i].anchor_vec
 
-        nomatch_targets[:, 2:6] *= ng
-
         na = len(anchor_vec)  # number of anchors
         a = torch.arange(na).view((-1, 1)).repeat([1, nt]).view(-1)
         t = nomatch_targets.repeat([na, 1])
         gwh = gwh.repeat([na, 1])
 
-        gwh = t[:, 4:6]
+        gwh = t[:, 4:6] * ng
         b, c = t[:, :2].long().t()  # target image, class
-        gxy = t[:, 2:4]  # grid x, y
+        gxy = t[:, 2:4] * ng  # grid x, y
         gi, gj = gxy.long().t()  # grid x, y indices
         roi_indices.append((b, a, gj, gi))
 
