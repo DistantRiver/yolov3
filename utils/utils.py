@@ -449,7 +449,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
             # with open('targets.txt', 'a') as file:
             #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
         
-        if i == 0:
+        if i == 0 and len(roi_indices) > 0:
             r_b, r_a, r_gj, r_gi = roi_indices[i]  # image, anchor, gridy, gridx
             nb_r = len(r_b)
             if nb_r:
