@@ -307,7 +307,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False):
 def roi_value(box, roi_boxes, roi_boxes_sum, x1y1x2y2=True):
     FloatTensor = torch.cuda.FloatTensor if box[0].is_cuda else torch.FloatTensor
 
-    num_box = len(box)
+    num_box = len(roi_boxes)
 
     if x1y1x2y2:  # x1, y1, x2, y2 = box
         b_x1, b_y1, b_x2, b_y2 = box[0], box[1], box[2], box[3]
@@ -461,10 +461,6 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
                 roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], x1y1x2y2=False)
                 pwh_r_co_w, pwh_r_co_h = pwh_r_co.t()
-                print(roi_loss.size())
-                print(pwh_r_co_w.size())
-                print(pwh_r_co_h.size())
-                print(roi_mask.size())
                 roi_loss = ((1 - roi_loss) + pwh_r_co_w * pwh_r_co_h) * roi_mask
                 lroi += roi_loss.mean()
                 tobj[r_b, r_a, r_gj, r_gi] += roi_mask
