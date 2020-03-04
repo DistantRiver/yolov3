@@ -307,8 +307,8 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False):
 def roi_value(box, roi_boxes, roi_boxes_sum, roi_mask, x1y1x2y2=True):
     FloatTensor = torch.cuda.FloatTensor if box[0].is_cuda else torch.FloatTensor
 
-    num_box = len(roi_boxes)
-    real_roi_num = len(roi_mask.nonzero())
+    real_roi_index = roi_mask.nonzero()
+    num_box = len(real_roi_index)
 
     if x1y1x2y2:  # x1, y1, x2, y2 = box
         b_x1, b_y1, b_x2, b_y2 = box[0], box[1], box[2], box[3]
@@ -316,23 +316,20 @@ def roi_value(box, roi_boxes, roi_boxes_sum, roi_mask, x1y1x2y2=True):
         b_x1, b_x2 = box[0] - box[2] / 2, box[0] + box[2] / 2
         b_y1, b_y2 = box[1] - box[3] / 2, box[1] + box[3] / 2
     
-    values = FloatTensor(real_roi_num)
-    count = 0
+    values = FloatTensor(num_box)
+
     for i in range(num_box):
-        if roi_mask[i] == 0:
-            continue
-        boxes = roi_boxes[i].t()
+        boxes = roi_boxes[real_roi_index[i]].t()
         if x1y1x2y2:  # x1, y1, x2, y2 = box
             bs_x1, bs_y1, bs_x2, bs_y2 = boxes[0], boxes[1], boxes[2], boxes[3]
         else:  # x, y, w, h = box
             bs_x1, bs_x2 = boxes[0] - boxes[2] / 2, boxes[0] + boxes[2] / 2
             bs_y1, bs_y2 = boxes[1] - boxes[3] / 2, boxes[1] + boxes[3] / 2
 
-        inter = (torch.min(b_x2[count], bs_x2) - torch.max(b_x1[count], bs_x1)).clamp(0) * \
-                (torch.min(b_y2[count], bs_y2) - torch.max(b_y1[count], bs_y1)).clamp(0)
+        inter = (torch.min(b_x2[i], bs_x2) - torch.max(b_x1[i], bs_x1)).clamp(0) * \
+                (torch.min(b_y2[i], bs_y2) - torch.max(b_y1[i], bs_y1)).clamp(0)
         
-        values[count] = torch.sum(inter) / roi_boxes_sum[i]
-        count += 1
+        values[i] = torch.sum(inter) / roi_boxes_sum[real_roi_index[i]]
 
     return values
 
@@ -464,7 +461,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
                 pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
                 pwh_r = pwh_r_co * roi_anchor_vec[i][roi_mask]
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
-                roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], roi_mask.view(-1), x1y1x2y2=False)
+                roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], roi_mask, x1y1x2y2=False)
                 pwh_r_co_w, pwh_r_co_h = pwh_r_co.t()
                 roi_loss = ((1 - roi_loss) + pwh_r_co_w * pwh_r_co_h)
                 lroi += roi_loss.mean()
