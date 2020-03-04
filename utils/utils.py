@@ -459,7 +459,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
                 pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
                 pwh_r = pwh_r_co * roi_anchor_vec[i][roi_mask]
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
-                roi_loss = roi_value(pbox_r.t(), roi_boxes[i][roi_mask], roi_boxes_sum[i][roi_mask], x1y1x2y2=False)
+                roi_loss = roi_value(pbox_r.t(), roi_boxes[i][roi_mask.view(-1)], roi_boxes_sum[i][roi_mask.view(-1)], x1y1x2y2=False)
                 pwh_r_co_w, pwh_r_co_h = pwh_r_co.t()
                 roi_loss = ((1 - roi_loss) + pwh_r_co_w * pwh_r_co_h)
                 lroi += roi_loss.mean()
@@ -586,16 +586,18 @@ def build_targets(model, targets, img_num):
         nomatch_boxes = torch.cat((gxy, gwh), 1)
 
         img_indexes = [[] * img_num for k in range(img_num)]
-        nomatch_boxes_sorted = FloatTensor(img_num)
+        nomatch_boxes_sorted = []
         nomatch_boxes_sorted_sum = FloatTensor(img_num).fill_(0)
         for m, img_index in enumerate(b):
             img_indexes[img_index].append(m)
             nomatch_boxes_sorted_sum[img_index] += (gwh[m][0] * gwh[m][1])
         
         for j in range(img_num):
-            nomatch_boxes_sorted[j] = nomatch_boxes[img_indexes[j]]
+            nomatch_boxes_sorted.append(nomatch_boxes[img_indexes[j]])
         
-        nomatch_boxes_all = nomatch_boxes_sorted[b]
+        nomatch_boxes_all = []
+        for m, img_index in enumerate(b):
+            nomatch_boxes_all.append(nomatch_boxes_sorted[img_index])
         
         nomatch_boxes_all_sum = nomatch_boxes_sorted_sum[b]
 
