@@ -586,22 +586,20 @@ def build_targets(model, targets, img_num):
         nomatch_boxes = torch.cat((gxy, gwh), 1)
 
         img_indexes = [[] * img_num for k in range(img_num)]
-        nomatch_boxes_sorted = []
+        nomatch_boxes_sorted = FloatTensor(img_num)
         nomatch_boxes_sorted_sum = FloatTensor(img_num).fill_(0)
         for m, img_index in enumerate(b):
             img_indexes[img_index].append(m)
             nomatch_boxes_sorted_sum[img_index] += (gwh[m][0] * gwh[m][1])
         
         for j in range(img_num):
-            nomatch_boxes_sorted.append(nomatch_boxes[img_indexes[j]])
+            nomatch_boxes_sorted[j] = nomatch_boxes[img_indexes[j]]
         
-        nomatch_boxes_all = []
-        for m, img_index in enumerate(b):
-            nomatch_boxes_all.append(nomatch_boxes_sorted[img_index])
+        nomatch_boxes_all = nomatch_boxes_sorted[b]
         
         nomatch_boxes_all_sum = nomatch_boxes_sorted_sum[b]
 
-        roi_boxes.append(FloatTensor(nomatch_boxes_all))
+        roi_boxes.append(nomatch_boxes_all)
         roi_boxes_sum.append(nomatch_boxes_all_sum)
 
         roi_cls.append(LongTensor(len(b)).fill_(model.nc - 1))
