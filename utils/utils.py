@@ -328,8 +328,8 @@ def roi_value(box, roi_boxes, roi_boxes_sum, roi_mask, x1y1x2y2=True):
             bs_x1, bs_x2 = boxes[0] - boxes[2] / 2, boxes[0] + boxes[2] / 2
             bs_y1, bs_y2 = boxes[1] - boxes[3] / 2, boxes[1] + boxes[3] / 2
 
-        inter = (torch.min(b_x2[i], bs_x2) - torch.max(b_x1[i], bs_x1)).clamp(0) * \
-                (torch.min(b_y2[i], bs_y2) - torch.max(b_y1[i], bs_y1)).clamp(0)
+        inter = (torch.min(b_x2[count], bs_x2) - torch.max(b_x1[count], bs_x1)).clamp(0) * \
+                (torch.min(b_y2[count], bs_y2) - torch.max(b_y1[count], bs_y1)).clamp(0)
         
         values[count] = torch.sum(inter) / roi_boxes_sum[i]
         count += 1
