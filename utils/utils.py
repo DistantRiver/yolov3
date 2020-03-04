@@ -315,7 +315,7 @@ def roi_value(box, roi_boxes, roi_boxes_sum, x1y1x2y2=True):
         b_x1, b_x2 = box[0] - box[2] / 2, box[0] + box[2] / 2
         b_y1, b_y2 = box[1] - box[3] / 2, box[1] + box[3] / 2
     
-    roi_value = FloatTensor(num_box)
+    values = FloatTensor(num_box)
     for i in range(num_box):
         boxes = roi_boxes[i].t()
         if x1y1x2y2:  # x1, y1, x2, y2 = box
@@ -327,9 +327,9 @@ def roi_value(box, roi_boxes, roi_boxes_sum, x1y1x2y2=True):
         inter = (torch.min(b_x2[i], bs_x2) - torch.max(b_x1[i], bs_x1)).clamp(0) * \
                 (torch.min(b_y2[i], bs_y2) - torch.max(b_y1[i], bs_y1)).clamp(0)
         
-        roi_value[i] = torch.sum(inter) / roi_boxes_sum[i]
+        values[i] = torch.sum(inter) / roi_boxes_sum[i]
 
-    return roi_value
+    return values
 
 def box_iou(boxes1, boxes2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
@@ -601,7 +601,7 @@ def build_targets(model, targets, img_num):
         
         nomatch_boxes_all_sum = nomatch_boxes_sorted_sum[b]
 
-        roi_boxes.append(nomatch_boxes_all)
+        roi_boxes.append(FloatTensor(nomatch_boxes_all))
         roi_boxes_sum.append(nomatch_boxes_all_sum)
 
         roi_cls.append(LongTensor(len(b)).fill_(model.nc - 1))
