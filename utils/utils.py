@@ -469,7 +469,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
 
                 if 'default' in arc and model.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.zeros_like(ps_r[:, 5:])  # targets
-                    t[range(nb_r), roi_cls[i][roi_mask]] = 1.0
+                    t[range(len(ps_r)), roi_cls[i][roi_mask]] = 1.0
                     lcls += BCEcls(ps_r[:, 5:], t)  # BCE
 
         if 'default' in arc:  # separate obj and cls
