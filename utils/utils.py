@@ -457,7 +457,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
                 ps_r = pi[r_b, r_a, r_gj, r_gi][roi_mask]
                 pxy_r = torch.sigmoid(ps_r[:, 0:2])  # pxy = pxy * s - (s - 1) / 2,  s = 1.5  (scale_xy)
                 pwh_r_co = torch.exp(ps_r[:, 2:4]).clamp(max=1E3)
-                pwh_r = pwh_r_co * roi_anchor_vec[i]
+                pwh_r = pwh_r_co * roi_anchor_vec[i][roi_mask]
                 pbox_r = torch.cat((pxy_r, pwh_r), 1)  # predicted box
                 roi_loss = roi_value(pbox_r.t(), roi_boxes[i], roi_boxes_sum[i], x1y1x2y2=False)
                 pwh_r_co_w, pwh_r_co_h = pwh_r_co.t()
