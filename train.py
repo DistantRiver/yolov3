@@ -23,6 +23,7 @@ results_file = 'results.txt'
 # Hyperparameters (results68: 59.9 mAP@0.5 yolov3-spp-416) https://github.com/ultralytics/yolov3/issues/310
 
 hyp = {'giou': 3.54,  # giou loss gain
+       'roi': 10, # roi loss gain
        'cls': 37.4,  # cls loss gain
        'cls_pw': 1.0,  # cls BCELoss positive_weight
        'obj': 64.3,  # obj loss gain (*=img_size/320 if img_size != 320)

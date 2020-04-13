@@ -490,6 +490,7 @@ def compute_loss(p, targets, model, img_num, giou_flag=True):  # predictions, ta
     lbox *= h['giou']
     lobj *= h['obj']
     lcls *= h['cls']
+    lroi *= h['roi']
     if red == 'sum':
         bs = tobj.shape[0]  # batch size
         lobj *= 3 / (6300 * bs) * 2  # 3 / np * 2
@@ -560,6 +561,7 @@ def build_targets(model, targets, img_num):
                                        'See https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data' % (
                                            model.nc, model.nc - 1, c.max())
     
+    nomatch_mask = nomatch_mask.bool()
     nomatch_targets = targets[nomatch_mask]
     roi_boxes = []
     roi_boxes_sum = []
